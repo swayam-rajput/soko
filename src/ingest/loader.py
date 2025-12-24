@@ -3,6 +3,8 @@ from pathlib import Path
 import pdfplumber
 import json
 import csv
+import logging
+logging.getLogger('pdfminer').setLevel(logging.ERROR)
 
 
 class Document:

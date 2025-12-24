@@ -2,34 +2,42 @@ import sys
 
 from src.ingest.indexer import Indexer
 from src.agent.chain import FileSearchAgent
-from chromadb import PersistentClient
+from src.utils.utils import load_chunks_from_chroma
+
+from rich.console import Console
+from rich.panel import Panel
+from rich.text import Text
+from InquirerPy import inquirer
+
+console = Console()
+
+# ---------- UI helpers ----------
+def info(msg: str):
+    console.print(f"[cyan]{msg}[/cyan]")
+
+def success(msg: str):
+    console.print(f"[green]{msg}[/green]")
+
+def error(msg: str):
+    console.print(f"[red]{msg}[/red]")
+
+def show_answer(answer: str):
+    panel = Panel(
+        Text(answer.strip(), style="white"),
+        title="Answer",
+        border_style="bright_blue",
+    )
+    console.print(panel)
 
 
-# -------- utility: rebuild chunks from chroma --------
-def load_chunks_from_chroma(
-    persist_dir="data/chroma",
-    collection_name="soko_docs"
-):
-    client = PersistentClient(path=persist_dir)
-    collection = client.get_or_create_collection(collection_name)
-
-    data = collection.get(include=["documents", "metadatas"])
-
-    chunks = []
-    for text, meta in zip(data["documents"], data["metadatas"]):
-        chunks.append({
-            "text": text,
-            "meta": meta
-        })
-
-    return chunks
-
-
-# -------- menu actions --------
+# ---------- actions ----------
 def ingest_documents():
-    path = input("\nEnter folder path to ingest: ").strip()
-    if not path:
-        print("Invalid path.")
+    path = inquirer.text(
+        message="Enter folder path to ingest:"
+    ).execute()
+
+    if not path.strip():
+        error("Invalid path.")
         return
 
     indexer = Indexer(
@@ -37,58 +45,55 @@ def ingest_documents():
         collection_name="soko_docs"
     )
 
-    print("\nIngesting documents...")
+    info("Ingesting documents...")
     indexer.ingest(path)
-    print("Ingestion complete.\n")
+    success("Ingestion complete.")
 
 
-def ask_question():
-    print("\nLoading indexed chunks...")
+def ask_questions():
+    info("Loading indexed chunks...")
     chunks = load_chunks_from_chroma()
 
     if not chunks:
-        print("No documents indexed. Please ingest first.\n")
+        error("No documents indexed. Please ingest first.")
         return
 
     agent = FileSearchAgent(chunks)
 
     while True:
-        question = input("\nAsk a question (or type 'back'): ").strip()
+        question = inquirer.text(
+            message="Ask a question (type 'back' to return):"
+        ).execute()
+
         if question.lower() == "back":
             break
-        if not question:
+        if not question.strip():
             continue
 
         answer = agent.ask(question)
-        print("\n--- ANSWER ---")
-        print(answer)
-        print("--------------")
+        show_answer(answer)
 
 
 def exit_program():
-    print("\nExiting Intelligent File System.")
+    info("Exiting Soko.")
     sys.exit(0)
 
 
-# -------- main menu loop --------
-def main_menu():
+# ---------- menu ----------
+def run_cli():
     while True:
-        print("\n===== Intelligent File System =====")
-        print("1. Ingest documents")
-        print("2. Ask questions")
-        print("3. Exit")
+        choice = inquirer.select(
+            message="Soko — Intelligent File System",
+            choices=[
+                "Ingest documents",
+                "Ask questions",
+                "Exit",
+            ],
+        ).execute()
 
-        choice = input("Select an option: ").strip()
-
-        if choice == "1":
+        if choice == "Ingest documents":
             ingest_documents()
-        elif choice == "2":
-            ask_question()
-        elif choice == "3":
+        elif choice == "Ask questions":
+            ask_questions()
+        elif choice == "Exit":
             exit_program()
-        else:
-            print("Invalid option. Try again.")
-
-
-if __name__ == "__main__":
-    main_menu()

@@ -1,6 +1,4 @@
-def main():
-    print("Hello from soko!")
-
+from src.cli.repl import run_repl
 
 if __name__ == "__main__":
-    main()
+    run_repl()
