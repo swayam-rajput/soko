@@ -1,7 +1,7 @@
-from langchain_openai import ChatOpenAI
+from langchain_google_genai import ChatGoogleGenerativeAI
 from langgraph.graph import StateGraph, END
 # from src.agent.tools import RetrievalTools
-from tools import RetrievalTools
+from .tools import RetrievalTools
 from typing import TypedDict
 
 class AgentState(TypedDict):
@@ -12,8 +12,8 @@ class AgentState(TypedDict):
 class FileSearchAgent:
     """Langchain agnet that searches documents and answers questions"""
     def __init__(self, chunks):
-        self.llm = ChatOpenAI(
-            model='gpt-4o-mini',
+        self.llm = ChatGoogleGenerativeAI(
+            model='gemini-2.5-flash',
             temperature=0
         )
         self.tools = RetrievalTools(chunks)

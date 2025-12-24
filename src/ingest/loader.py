@@ -118,5 +118,5 @@ class DirectoryLoader:
             "parent":     str(path.parent)
         }
 
-document = DirectoryLoader('data/').load()
-print(document)
+# document = DirectoryLoader('data/').load()
+# print(document)

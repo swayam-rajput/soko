@@ -1,44 +1,94 @@
-import argparse
+import sys
 
+from src.ingest.indexer import Indexer
 from src.agent.chain import FileSearchAgent
-
-# HOWEVER you load chunks in your project
-# This MUST be the same source used for indexing
-def load_chunks():
-    """
-    Replace this with your real chunk-loading logic.
-    For now, this assumes chunks were saved or cached somewhere.
-    """
-    # Example placeholder
-    # return [{"text": "...", "meta": {"source": "file.txt"}}]
-    raise NotImplementedError("Implement chunk loading here")
+from chromadb import PersistentClient
 
 
-def main():
-    parser = argparse.ArgumentParser(
-        description="Ask questions over your indexed documents"
+# -------- utility: rebuild chunks from chroma --------
+def load_chunks_from_chroma(
+    persist_dir="data/chroma",
+    collection_name="soko_docs"
+):
+    client = PersistentClient(path=persist_dir)
+    collection = client.get_or_create_collection(collection_name)
+
+    data = collection.get(include=["documents", "metadatas"])
+
+    chunks = []
+    for text, meta in zip(data["documents"], data["metadatas"]):
+        chunks.append({
+            "text": text,
+            "meta": meta
+        })
+
+    return chunks
+
+
+# -------- menu actions --------
+def ingest_documents():
+    path = input("\nEnter folder path to ingest: ").strip()
+    if not path:
+        print("Invalid path.")
+        return
+
+    indexer = Indexer(
+        persistent_path="data/chroma",
+        collection_name="soko_docs"
     )
-    parser.add_argument(
-        "question",
-        type=str,
-        help="Question to ask the document store"
-    )
-    parser.add_argument(
-        "--top-k",
-        type=int,
-        default=5,
-        help="Number of chunks to retrieve"
-    )
 
-    args = parser.parse_args()
+    print("\nIngesting documents...")
+    indexer.ingest(path)
+    print("Ingestion complete.\n")
 
-    chunks = load_chunks()
+
+def ask_question():
+    print("\nLoading indexed chunks...")
+    chunks = load_chunks_from_chroma()
+
+    if not chunks:
+        print("No documents indexed. Please ingest first.\n")
+        return
+
     agent = FileSearchAgent(chunks)
 
-    answer = agent.ask(args.question)
-    print("\n=== ANSWER ===\n")
-    print(answer)
+    while True:
+        question = input("\nAsk a question (or type 'back'): ").strip()
+        if question.lower() == "back":
+            break
+        if not question:
+            continue
+
+        answer = agent.ask(question)
+        print("\n--- ANSWER ---")
+        print(answer)
+        print("--------------")
+
+
+def exit_program():
+    print("\nExiting Intelligent File System.")
+    sys.exit(0)
+
+
+# -------- main menu loop --------
+def main_menu():
+    while True:
+        print("\n===== Intelligent File System =====")
+        print("1. Ingest documents")
+        print("2. Ask questions")
+        print("3. Exit")
+
+        choice = input("Select an option: ").strip()
+
+        if choice == "1":
+            ingest_documents()
+        elif choice == "2":
+            ask_question()
+        elif choice == "3":
+            exit_program()
+        else:
+            print("Invalid option. Try again.")
 
 
 if __name__ == "__main__":
-    main()
+    main_menu()

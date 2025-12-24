@@ -34,7 +34,7 @@ class KeywordSearcher:
             key=lambda x: x[1],
             reverse=True
         )[:top_k]
-        print(list(enumerate(scores)))
+        # print(list(enumerate(scores)))
         
         return [
             {
