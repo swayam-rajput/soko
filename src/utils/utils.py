@@ -19,6 +19,6 @@ from rich.console import Console
 
 console = Console()
 
-def log(msg: str): console.print(msg, style="grey70")
-def log_warn(msg): console.print(msg, style="yellow")
-def log_error(msg): console.print(msg, style="red")
+def log(msg: str): console.print('\[system] '+msg, style="grey70")
+def log_warn(msg): console.print('\[system-warning] '+msg, style="yellow")
+def log_error(msg): console.print('\[system-error] '+msg, style="red")

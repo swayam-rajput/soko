@@ -1,126 +1,123 @@
-import chromadb
-from pathlib import Path
 import uuid
+from pathlib import Path
+from typing import Dict
 
-from .loader import DirectoryLoader
-from .embedder import Embedder
-from .chunker import Chunker
+import chromadb
 
-from ..utils.utils import log,log_error,log_warn
-from ..utils.registry import register_directory
+from src.ingest.loader import DirectoryLoader, Document
+from src.ingest.chunker import Chunker
+from src.ingest.embedder import Embedder
+from src.utils.registry import register_files
+from src.utils.utils import log, log_warn, log_error
 
 BATCH_SIZE = 500
 
 
 class Indexer:
+    """
+    Coordinates ingestion:
+    Loader -> Chunker -> Embedder -> ChromaDB -> Registry
+    """
+
     def __init__(
         self,
-        persistent_path: str = "data/chroma",
+        persist_path: str = "data/chroma",
         collection_name: str = "soko_docs",
     ):
-        self.persistent_path = persistent_path
+        self.persist_path = persist_path
         self.collection_name = collection_name
 
         self.client = None
         self.collection = None
 
         self.chunker = Chunker()
-        self.embedder = Embedder()
+        self.embedder = None  # lazy init
+
+    # ---------- internal ----------
 
     def _init_db(self):
-        if self.client is not None:
+        if self.client:
             return
 
-        Path(self.persistent_path).parent.mkdir(parents=True, exist_ok=True)
-        log(f"\[system] Initializing Vector DB at {self.persistent_path}")
+        Path(self.persist_path).parent.mkdir(parents=True, exist_ok=True)
+        log(f"[system] Initializing vector database at {self.persist_path}")
 
-        self.client = chromadb.PersistentClient(path=self.persistent_path)
+        self.client = chromadb.PersistentClient(path=self.persist_path)
         self.collection = self.client.get_or_create_collection(self.collection_name)
 
-    def ingest(self, path_str: str):
-        path = Path(path_str)
+    def _init_embedder(self):
+        if self.embedder:
+            return
 
-        if not path.exists():
-            log_error(f"\[system-error] Path does not exist: {path}")
+        log("[system] Loading embedding model")
+        self.embedder = Embedder()
+
+    # ---------- public ----------
+
+    def ingest(self, path: str) -> bool:
+        """
+        Ingest a directory or a single file.
+        Returns True if anything was ingested.
+        """
+        loader = DirectoryLoader(path)
+        documents = loader.load()
+
+        if not documents:
+            log_warn("[system-warning] Nothing new to ingest.")
             return False
 
-        if path.is_file():
-            return self._ingest_file(path)
-
-        if path.is_dir():
-            return self._ingest_directory(path)
-
-        log_error(f"\[system-error] Unsupported path: {path}")
-        return False
-
-    def _ingest_file(self, file_path: Path):
-        log(f"\[system] Ingesting file: {file_path.name}")
-
-        loader = DirectoryLoader(file_path.parent)
-        doc = loader.load_file(file_path)
-
-        if not doc:
-            log_error("\[system-error] Failed to load file")
+        # Chunk
+        chunks = self.chunker.chunk(documents)
+        if not chunks:
+            log_warn("[system-warning] No chunks created.")
             return False
 
-        return self._process_documents(
-            docs=[doc],
-            parent=file_path.parent,
-        )
-
-    
-
-    def _ingest_directory(self, directory: Path):
-        log(f"\[system] Ingesting directory: {directory}")
-
-        loader = DirectoryLoader(directory)
-        docs = loader.load()
-
-        if not docs:
-            log_warn("\[system-warning] No documents found.")
-            return False
-
-        return self._process_documents(
-            docs=docs,
-            parent=directory,
-        )
-
-
-    def _process_documents(self, docs, parent: Path):
-        chunks = self.chunker.chunk(docs)
-        if not chunks: 
-            log_warn('\[system-warning] No chunks created.')
-            return False
-    
+        # Init heavy resources only now
         self._init_db()
-        
-        log(f'\[system] Embedding {len(chunks)} chunks')
-        
-        ids = [str(uuid.uuid4()) for _ in chunks]
+        self._init_embedder()
+
         texts = [c.text for c in chunks]
         metadatas = [c.meta for c in chunks]
+        ids = [str(uuid.uuid4()) for _ in chunks]
+
+        log(f"[system] Embedding {len(chunks)} chunks")
         embeddings = self.embedder.embed(texts)
 
-        log("\[system] Saving to ChromaDB...")
-        for i in range(0, len(ids), BATCH_SIZE):
-            self.collection.add(
-                ids=ids[i:i+BATCH_SIZE],
-                embeddings=embeddings[i:i+BATCH_SIZE],
-                documents=texts[i:i+BATCH_SIZE],
-                metadatas=metadatas[i:i+BATCH_SIZE],
-            )
+        log("[system] Writing embeddings to ChromaDB")
+        try:
+            for i in range(0, len(ids), BATCH_SIZE):
+                self.collection.add(
+                    ids=ids[i : i + BATCH_SIZE],
+                    embeddings=embeddings[i : i + BATCH_SIZE],
+                    documents=texts[i : i + BATCH_SIZE],
+                    metadatas=metadatas[i : i + BATCH_SIZE],
+                )
+        except Exception as e:
+            log_error(f"[system-error] Failed to write to ChromaDB: {e}")
+            return False
 
-        log(f"\[system] Ingestion complete. Total stored: {self.collection.count()}")
+        # ---- registry update (commit point) ----
+        file_map: Dict[str, str] = {}
+        for doc in documents:
+            file_map[doc.path.name] = doc.meta["hash"]
 
-        from src.utils.registry import register_directory
-        register_directory(
-            directory=parent,
-            file_names=[d.path.name for d in docs],
-            file_count=len(docs),
+        parent_dir = documents[0].path.parent
+        register_files(
+            directory=parent_dir,
+            file_map=file_map,
             chunk_count=len(chunks),
         )
 
-        return True    
-    
-        
+        log(
+            f"[system] Ingestion complete. "
+            f"Stored {len(chunks)} chunks from {len(file_map)} files."
+        )
+        return True
 
+    def close(self):
+        """
+        Explicitly release DB resources.
+        Required for reset on Windows.
+        """
+        self.client = None
+        self.collection = None

@@ -35,6 +35,18 @@ def show_help():
 
 
 def run_repl():
+    logo = """
+
+
+    ███████╗ ██████╗ ██╗  ██╗ ██████╗
+    ██╔════╝██╔═══██╗██║ ██╔╝██╔═══██╗
+    ███████╗██║   ██║█████╔╝ ██║   ██║
+    ╚════██║██║   ██║██╔═██╗ ██║   ██║
+    ███████║╚██████╔╝██║  ██╗╚██████╔╝
+    ╚══════╝ ╚═════╝ ╚═╝  ╚═╝ ╚═════╝
+
+"""
+    print(logo)
     print("Soko — Intelligent File System")
     print_dim("Type 'help' to see available commands.\n")
 

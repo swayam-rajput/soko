@@ -52,7 +52,7 @@ class Cache:
     def clear(self):
         self.conn.execute("DELETE FROM cache")
         self.conn.commit()
-
+    
     def size(self) -> int:
         cur = self.conn.execute("SELECT COUNT(*) FROM cache")
         return cur.fetchone()[0]
