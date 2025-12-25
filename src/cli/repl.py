@@ -72,7 +72,7 @@ def run_repl():
                 success = indexer.ingest(path)
                 if success:
                     print_dim("\[system] Ingestion finished")
-                else: print_error('Ingestion failed.')
+                else: print_error('\[system] Ingestion failed.')
 
                 agent = None  # reset agent after ingestion
 
@@ -85,7 +85,7 @@ def run_repl():
                     print_dim("\[system] Loading indexed documents...")
                     chunks = load_chunks_from_chroma()
                     if not chunks:
-                        print_error("No documents indexed. Run 'ingest' first.")
+                        print_error("\[system-error] No documents indexed. Run 'ingest' first.")
                         continue
                     agent = FileSearchAgent(chunks)
 

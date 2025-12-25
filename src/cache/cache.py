@@ -1,16 +1,58 @@
+import sqlite3
 import hashlib
+import time
+from pathlib import Path
 from typing import Optional
 
-class AnswerCache:
+DB_PATH = Path("data/cache-db/cache.db")
+
+
+class Cache:
     def __init__(self):
-        self._store = {}
+        DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+        self.conn = sqlite3.connect(DB_PATH)
+        self._init_db()
 
-    def _key(self, question: str, context: str) -> str:
-        data = (question + context).encode("utf-8")
-        return hashlib.sha256(data).hexdigest()
+    def _init_db(self):
+        self.conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS cache (
+                key TEXT PRIMARY KEY,
+                answer TEXT NOT NULL,
+                model TEXT,
+                created_at REAL
+            )
+            """
+        )
+        self.conn.commit()
 
-    def get(self, question: str, context: str) -> Optional[str]:
-        return self._store.get(self._key(question, context))
+    @staticmethod
+    def make_key(question: str, context: str) -> str:
+        payload = f"{question.strip()}||{context.strip()}"
+        return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
-    def set(self, question: str, context: str, answer: str):
-        self._store[self._key(question, context)] = answer
+    def get(self, key: str) -> Optional[str]:
+        cur = self.conn.execute(
+            "SELECT answer FROM cache WHERE key = ?",
+            (key,)
+        )
+        row = cur.fetchone()
+        return row[0] if row else None
+
+    def set(self, key: str, answer: str, model: str):
+        self.conn.execute(
+            """
+            INSERT OR REPLACE INTO cache (key, answer, model, created_at)
+            VALUES (?, ?, ?, ?)
+            """,
+            (key, answer, model, time.time())
+        )
+        self.conn.commit()
+
+    def clear(self):
+        self.conn.execute("DELETE FROM cache")
+        self.conn.commit()
+
+    def size(self) -> int:
+        cur = self.conn.execute("SELECT COUNT(*) FROM cache")
+        return cur.fetchone()[0]

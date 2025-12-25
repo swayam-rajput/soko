@@ -3,7 +3,7 @@ from langgraph.graph import StateGraph, END
 # from src.agent.tools import RetrievalTools
 from .tools import RetrievalTools
 from typing import TypedDict
-from src.cache.cache import AnswerCache
+from src.cache.cache import Cache
 
 class AgentState(TypedDict):
     question:str
@@ -19,7 +19,7 @@ class FileSearchAgent:
         )
         self.tools = RetrievalTools(chunks)
         self.graph = self._build()
-        self.cache = AnswerCache()
+        self.cache = Cache()
 
     def _build(self):
         graph = StateGraph(AgentState)
@@ -31,9 +31,12 @@ class FileSearchAgent:
         def answer(state:AgentState):
             context = state['context']
             question = state['question']
-            cached = self.cache.get(question,context)
+
+            cache_key = self.cache.make_key(question,context)
+            cached = self.cache.get(cache_key)
+            
             if cached:
-                print('no LLM call')
+                print('[system] Cache hit (No LLM Call)')
                 return {'answer':cached}
             
             prompt = f"""
@@ -47,7 +50,11 @@ Question:
             
             
             response = self.llm.invoke(prompt)
-            self.cache.set(question,context,response.content)
+            self.cache.set(
+                key=cache_key,
+                answer=response.content,
+                model=self.llm.model,
+            )
             return {'answer': response.content}
         
         graph.add_node('retrieve', retrieve)
