@@ -70,9 +70,8 @@ def run_repl():
                 indexer = Indexer()
                 print_dim(f"\[system] Ingesting documents from {path}")
                 success = indexer.ingest(path)
-                if success:
-                    print_dim("\[system] Ingestion finished")
-                else: print_error('\[system] Ingestion failed.')
+                if not success:
+                    print_error('\[system] Ingestion failed.')
 
                 agent = None  # reset agent after ingestion
 
@@ -92,6 +91,23 @@ def run_repl():
                 question = " ".join(args)
                 answer = agent.ask(question)
                 print_answer(answer)
+            elif command.startswith("reset"):
+                from src.utils.reset import reset_cache, reset_index, reset_all
+
+                if len(parts) == 1:
+                    print_error("Usage: reset \[cache|index|all]")
+                    
+
+                target = parts[1]
+
+                if target == "cache":
+                    reset_cache()
+                elif target == "index":
+                    reset_index()
+                elif target == "all":
+                    reset_all()
+                else:
+                    print_error("Invalid reset option. Use: cache, index, or all.")
 
             else:
                 print_error(f"Unknown command: {command}")
