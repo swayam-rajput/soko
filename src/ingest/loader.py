@@ -1,19 +1,28 @@
-import os
-from pathlib import Path
-import pdfplumber
-import json
+import time
 import csv
+import json
+import pdfplumber
+from pathlib import Path
 import logging
-logging.getLogger('pdfminer').setLevel(logging.ERROR)
+
+logging.getLogger("pdfminer").setLevel(logging.ERROR)
+
+from src.utils.utils import log
 
 
 class Document:
     def __init__(self, path: Path, text: str, meta: dict):
         self.path = path
         self.text = text
-        self.meta = meta                # size, modified time, extension etc.
+        self.meta = meta
+
     def __repr__(self):
-        return f"{self.path}, {self.meta['size']} bytes, {self.meta['modified']}, {self.meta['extension']}, {self.meta['filename']}, {self.meta['parent']}"
+        return (
+            f"{self.path}, {self.meta['size']} bytes, "
+            f"{self.meta['modified']}, {self.meta['extension']}, "
+            f"{self.meta['filename']}, {self.meta['parent']}"
+        )
+
 
 class DirectoryLoader:
     """
@@ -27,31 +36,58 @@ class DirectoryLoader:
         ".pdf": "pdf",
         ".py":  "code",
         ".csv": "csv",
-        ".json":"json"
+        ".json": "json",
     }
 
     def __init__(self, directory: str):
         self.directory = Path(directory)
 
     def load(self):
+        start_time = time.time()
+
+        # --- pre-scan ---
+        all_files = [
+            p for p in self.directory.rglob("*")
+            if p.is_file() and p.suffix.lower() in self.SUPPORTED
+        ]
+
+        total = len(all_files)
+        if total == 0:
+            log("[system] No supported files found.")
+            return []
+
+        log(f"[system] Found {total} supported files. Starting ingestion...")
+
         docs = []
-        for file_path in self.directory.rglob("*"):
-            if not file_path.is_file():
-                continue
+        processed = 0
 
-            ext = file_path.suffix.lower()
-            if ext not in self.SUPPORTED:
-                continue
+        for idx, file_path in enumerate(all_files, start=1):
+            processed += 1
+            elapsed = time.time() - start_time
+            avg_time = elapsed / processed
+            remaining = avg_time * (total - processed)
 
-            loader_type = self.SUPPORTED[ext]
+            log(
+                f"[system] ({idx}/{total}) Processing: {file_path.name} "
+                f"| elapsed: {elapsed:.1f}s | ETA: {remaining:.1f}s"
+            )
+
+            loader_type = self.SUPPORTED[file_path.suffix.lower()]
             text = self._dispatch(file_path, loader_type)
 
             if text and text.strip():
                 meta = self._build_metadata(file_path)
                 docs.append(Document(file_path, text, meta))
 
+        total_time = time.time() - start_time
+        log(
+            f"[system] Ingestion complete. "
+            f"Loaded {len(docs)} documents in {total_time:.1f}s."
+        )
+
         return docs
 
+    # ---------- loaders ----------
 
     def _dispatch(self, path, type_):
         if type_ == "text":
@@ -66,11 +102,9 @@ class DirectoryLoader:
             return self._load_json(path)
         return None
 
-
     def _load_text(self, path):
         try:
-            with open(path, "r", encoding="utf-8", errors="ignore") as f:
-                return f.read()
+            return path.read_text(encoding="utf-8", errors="ignore")
         except:
             return None
 
@@ -86,8 +120,7 @@ class DirectoryLoader:
 
     def _load_code(self, path):
         try:
-            with open(path, "r", encoding="utf-8", errors="ignore") as f:
-                return f.read()
+            return path.read_text(encoding="utf-8", errors="ignore")
         except:
             return None
 
@@ -113,12 +146,9 @@ class DirectoryLoader:
     def _build_metadata(self, path):
         stat = path.stat()
         return {
-            "extension":  path.suffix.lower(),
-            "size":       stat.st_size,
-            "modified":   stat.st_mtime,
-            "filename":   path.name,
-            "parent":     str(path.parent)
+            "extension": path.suffix.lower(),
+            "size": stat.st_size,
+            "modified": stat.st_mtime,
+            "filename": path.name,
+            "parent": str(path.parent),
         }
-
-# document = DirectoryLoader('data/').load()
-# print(document)

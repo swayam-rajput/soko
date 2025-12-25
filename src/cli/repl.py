@@ -22,7 +22,7 @@ def print_answer(answer: str):
     panel = Panel(
         Text(answer.strip(), style="white"),
         title="Answer",
-        border_style="bright_blue",
+        border_style="#4A6D7C",
     )
     console.print(panel)
 
