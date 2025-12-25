@@ -42,7 +42,23 @@ class DirectoryLoader:
     def __init__(self, directory: str):
         self.directory = Path(directory)
 
-    def load(self):
+    def load_file(self, file_path: Path):
+        ext = file_path.suffix.lower()
+        if ext not in self.SUPPORTED:
+            return None
+
+        loader_type = self.SUPPORTED[ext]
+        text = self._dispatch(file_path, loader_type)
+
+        if text and text.strip():
+            meta = self._build_metadata(file_path)
+            log(f"\[system] Loaded file: {file_path.name}")
+            return Document(file_path, text, meta)
+
+        return None
+
+
+    def load(self) -> list:
         start_time = time.time()
 
         # --- pre-scan ---
@@ -56,7 +72,7 @@ class DirectoryLoader:
             log("[system] No supported files found.")
             return []
 
-        log(f"[system] Found {total} supported files. Starting ingestion...")
+        log(f"\[system] Found {total} supported files. Starting ingestion...")
 
         docs = []
         processed = 0
@@ -81,7 +97,7 @@ class DirectoryLoader:
 
         total_time = time.time() - start_time
         log(
-            f"[system] Ingestion complete. "
+            f"\[system] Ingestion complete. "
             f"Loaded {len(docs)} documents in {total_time:.1f}s."
         )
 
