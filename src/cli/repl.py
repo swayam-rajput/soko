@@ -33,6 +33,8 @@ def show_help():
     print_dim("Available commands:")
     print_dim("  ingest <path>")
     print_dim("  ask <question>")
+    print_dim("  reset")
+    print_dim("  status")
     print_dim("  exit")
 
 

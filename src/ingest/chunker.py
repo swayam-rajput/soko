@@ -17,7 +17,6 @@ class Chunker:
         all_chunks = []
 
         for doc in documents:
-            print('[loading] ',doc.path)
             text = doc.text
             if not text:
                 continue
