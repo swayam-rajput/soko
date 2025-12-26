@@ -1,0 +1,36 @@
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Local data (must be mounted as volumes, not baked into image)
+data/
+cache/
+*.sqlite3
+
+# Git
+.git/
+.gitignore
+
+# IDE / editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Docker artifacts
+Dockerfile
+docker-compose.yml
