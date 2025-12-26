@@ -7,6 +7,8 @@ from src.ingest.indexer import Indexer
 from src.agent.chain import FileSearchAgent
 from src.utils.utils import load_chunks_from_chroma
 from src.utils.utils import log_error,log
+from src.utils.status import status
+
 console = Console()
 
 
@@ -120,7 +122,8 @@ def run_repl():
                     reset_all()
                 else:
                     print_error("Invalid reset option. Use: cache, index, or all.")
-
+            elif command == "status":
+                status()
             else:
                 print_error(f"Unknown command: {command}")
                 print_dim("Type 'help' to see available commands.")
