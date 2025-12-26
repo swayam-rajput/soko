@@ -106,7 +106,7 @@ data/
 │── raw/
 ```
 
-### How Ingestion Works
+## How Ingestion Works
 #### 1. File discovery (directory or single file)
 #### 2. Content hashing for deduplication
 #### 3. Semantic chunking
@@ -114,7 +114,7 @@ data/
 #### 5. Vector storage in ChromaDB
 #### 6. Registry update (commit step)
 
-### How Retrieval Works
+## How Retrieval Works
 #### 1. Query embedding
 #### 2. Vector similarity search
 #### 3. Keyword/BM25-style scoring
