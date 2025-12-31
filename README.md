@@ -148,7 +148,7 @@ LangGraph is used to define an explicit execution graph (retrieve → answer). C
 - Keyword ranking is basic
 - Registry is JSON-based and may migrate to a database
 - No multi-user support
-
+- Add ASCII art to let users know the status of their operations
 
 
 
