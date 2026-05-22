@@ -20,7 +20,7 @@ class HybridSearcher:
         self.vector = VectorSearcher()
         self.keyword = KeywordSearcher(chunks)
 
-    def search(self, query: str, top_k: int = 5) -> List[Dict]:
+    def search(self, query: str, top_k: int = 20) -> List[Dict]:
         
         v_results = self.vector.query(query, top_k * 2)
 
@@ -64,7 +64,9 @@ class HybridSearcher:
         def add_results(results, weight):
             for r in results:
                 
-                source_id = r["meta"].get("source") or r["meta"].get("id")
+                # Use chunk text as the dedup key — unique per chunk,
+                # and robust regardless of which meta keys are present.
+                source_id = r["text"]
 
                 if source_id not in merged:
                     merged[source_id] = {
