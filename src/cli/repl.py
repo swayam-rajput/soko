@@ -6,8 +6,10 @@ from rich.text import Text
 from src.ingest.indexer import Indexer
 from src.agent.chain import FileSearchAgent
 from src.utils.utils import load_chunks_from_chroma
-from src.utils.utils import log_error,log
+from src.utils.utils import log_error, log
 from src.utils.status import status
+from src.utils.config import load_config, set_value
+from src.utils.ollama_manager import start_ollama, is_ollama_running, stop_ollama
 
 console = Console()
 
@@ -33,9 +35,56 @@ def show_help():
     print_dim("Available commands:")
     print_dim("  ingest <path>")
     print_dim("  ask <question>")
-    print_dim("  reset")
+    print_dim("  reset [cache|index|all]")
     print_dim("  status")
+    print_dim("  config")
     print_dim("  exit")
+
+
+def show_config():
+    """Pretty-print the current config."""
+    cfg = load_config()
+    console.print("\n[bold]Current settings:[/bold]", style="white")
+    for k, v in cfg.items():
+        console.print(f"  [cyan]{k}[/cyan] = [yellow]{v}[/yellow]")
+    console.print()
+
+
+def handle_config(args: list[str]):
+    """
+    config                        — show all settings
+    config set <key> <value>      — update a setting
+    """
+    if not args:
+        show_config()
+        return
+
+    if args[0] == "set":
+        if len(args) < 3:
+            print_error("Usage: config set <key> <value>")
+            print_dim("  Keys: use_ollama_by_default, ollama_autostart, ollama_model, ollama_base_url")
+            return
+
+        key, raw_val = args[1], args[2]
+
+        # Coerce booleans and keep strings
+        if raw_val.lower() in ("true", "1", "yes"):
+            val = True
+        elif raw_val.lower() in ("false", "0", "no"):
+            val = False
+        else:
+            val = raw_val  # keep as string (e.g. model name / URL)
+
+        set_value(key, val)
+        log(f"Config updated: {key} = {val}")
+
+        # If the user enabled autostart, fire it up right now too
+        if key == "ollama_autostart" and val is True:
+            cfg = load_config()
+            start_ollama(cfg["ollama_base_url"])
+    else:
+        print_error(f"Unknown config sub-command: {args[0]}")
+        print_dim("Usage: config | config set <key> <value>")
 
 
 def run_repl():
@@ -53,6 +102,17 @@ def run_repl():
     print(logo)
     print("Soko — Intelligent File System")
     print_dim("Type 'help' to see available commands.\n")
+
+    # --- Ollama autostart ---
+    cfg = load_config()
+    if cfg["ollama_autostart"]:
+        start_ollama(cfg["ollama_base_url"])
+    elif cfg["use_ollama_by_default"] and not is_ollama_running(cfg["ollama_base_url"]):
+        print_dim(
+            "[system] Ollama is set as default but is not running. "
+            "Run 'config set ollama_autostart true' to start it automatically, "
+            "or start it manually with: ollama serve"
+        )
 
     agent = None
 
@@ -126,6 +186,12 @@ def run_repl():
                     print_error("Invalid reset option. Use: cache, index, or all.")
             elif command == "status":
                 status()
+
+            elif command == "config":
+                handle_config(args)
+                # Reset agent so it picks up any changed settings on next 'ask'
+                agent = None
+
             else:
                 print_error(f"Unknown command: {command}")
                 print_dim("Type 'help' to see available commands.")
