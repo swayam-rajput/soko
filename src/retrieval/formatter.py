@@ -27,4 +27,4 @@ def to_llm_context(results: List[Dict]) -> str:
             )
             context_sections.append(section)
 
-            return "\n".join(context_sections).strip()
+        return "\n".join(context_sections).strip()
