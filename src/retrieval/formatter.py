@@ -1,30 +1,29 @@
 from typing import List, Dict
 
 
+# In src/retrieval/formatter.py
 def to_llm_context(results: List[Dict]) -> str:
-        """
-        Convert retrieval results into a clean text block formatted for LLM context ingestion.
-        Each result becomes a labeled document section.
+    """Format with actual filenames, not DOC indices."""
+    if not results:
+        return "[No relevant context found]"
+    
+    files = {}
+    for result in results:
+        text = result.get("text", "")
+        meta = result.get("meta", {})
         
-        Expected input format per item:
-        {
-            "score": float,
-            "text": str,
-            "meta": dict
-        }
-        """
-
-        context_sections = []
-
-        for i, r in enumerate(results, start=1):
-            path = r["meta"].get("doc_id") or r["meta"].get("source") or "unknown"
-            section = (
-                f"[DOC {i}]\n"
-                f"file: {path}\n"
-                f"score: {round(r['score'], 4)}\n"
-                f"---\n"
-                f"{r['text']}\n"
-            )
-            context_sections.append(section)
-
-        return "\n".join(context_sections).strip()
+        filename = meta.get("filename", "unknown")
+        parent = meta.get("parent", "")
+        file_key = f"{parent}/{filename}" if parent else filename
+        
+        if file_key not in files:
+            files[file_key] = []
+        files[file_key].append(text)
+    
+    context_parts = []
+    for source, chunks in files.items():
+        header = f"=== File: {source} ==="
+        content = "\n\n".join(chunks)
+        context_parts.append(f"{header}\n{content}\n")
+    
+    return "\n".join(context_parts)
