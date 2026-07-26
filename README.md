@@ -32,7 +32,7 @@ Both pipelines share the same vector database, registry, and cache.
 
 ## Workflow
 
-!(Workflow)[/soko-workflow.png]
+![Workflow](/soko-workflow.png)
 
 ---
 
@@ -214,7 +214,8 @@ LangGraph is used as the orchestration layer for Soko's query pipeline.
 Instead of implementing retrieval inside one large function, each stage is represented as an explicit node with clearly defined inputs and outputs.
 
 Current workflow:
-!(Workflow)[/soko-workflow.png]
+![Workflow](/soko-workflow.png)
+
 Using LangGraph keeps the retrieval workflow modular and allows future extensions such as
 
 - reranking
