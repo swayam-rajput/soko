@@ -141,7 +141,7 @@ def ensure_model_available(model_name: str, base_url: str = "http://localhost:11
     Check if a model is available, and prompt to pull it if not.
     
     Args:
-        model_name: Name of the model (e.g., "llama3")
+        model_name: Name of the model (e.g., "llama3.1")
         base_url: Ollama API base URL
         
     Returns:

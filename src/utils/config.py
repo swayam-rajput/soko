@@ -12,7 +12,7 @@ CONFIG_PATH = Path("data/soko_config.json")
 
 DEFAULTS: dict = {
     "use_ollama_by_default": False,
-    "ollama_model": "llama3",
+    "ollama_model": "llama3.1",
     "ollama_base_url": "http://localhost:11434",
     "ollama_autostart": False,   # auto-run `ollama serve` on startup
 }
