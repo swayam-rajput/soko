@@ -1,155 +1,451 @@
 # Soko
 
-Soko is an intelligent file system that ingests local documents, builds a semantic index over their contents, and answers natural-language questions using retrieval-augmented generation (RAG). It is designed as a system rather than a demo: ingestion is incremental, duplicate documents are prevented via content hashing, retrieval is hybrid (semantic + keyword), and reasoning is orchestrated through an explicit agent workflow.
+Soko is an intelligent file system that ingests local documents, builds a semantic index over their contents, and answers natural-language questions using Retrieval-Augmented Generation (RAG). It is designed as a production-oriented system rather than a demo: ingestion is incremental, duplicate documents are prevented through content hashing, retrieval combines semantic and keyword search, and the query pipeline is orchestrated using LangGraph.
 
+---
 
 ## Overview
 
-Soko allows a user to ingest local files or directories and query them conversationally from a CLI. Unlike basic RAG pipelines, Soko tracks what has already been ingested, avoids reprocessing identical files, caches previous answers to reduce LLM usage, and provides reset mechanisms that respect database lifecycles and operating system constraints.
+Soko allows users to ingest individual files or entire directories and interact with their documents through a terminal interface.
 
-## Architecture and Data Flow
-#### 1. Ingestion
-- User provides a file path or directory
-- Supported files are discovered recursively
-- Each file’s content hash (SHA-256) is computed
-- Files already present in the registry are skipped
+Unlike a basic RAG application, Soko focuses on building a persistent document system by supporting:
 
-#### 2. Processing
-- New documents are split into semantic chunks
-- Chunks are embedded using a sentence-transformer model
-- Embeddings and metadata are stored in ChromaDB
-
-#### 3. Registry Update
-- After successful writes, the registry is updated with file names and hashes
-- Enables incremental, restart-safe ingestion
-
-#### 4. Querying
-- User query triggers hybrid retrieval (vector + keyword)
-- Relevant chunks are assembled into an LLM-ready context
-
-#### 5. Reasoning
-- LangGraph orchestrates retrieval and answer generation
-- Persistent cache is checked before calling the LLM
-
-
-## Key Features
-
-- Multi-format ingestion: PDF, TXT, MD, CSV, JSON, and source code
-- Hash-based deduplication and incremental ingestion
-- Semantic chunking and embedding
-- Vector storage using ChromaDB
-- Hybrid retrieval (semantic + keyword)
-- Agentic reasoning using LangGraph
-- LLM-agnostic design (Gemini supported, local models planned)
+- Incremental ingestion
+- Hash-based deduplication
+- Hybrid retrieval
 - Persistent answer caching
-- CLI-based user interaction
-- Logical reset mechanisms (no unsafe file deletion)
-- Registry tracking of ingested directories and files
+- Explicit query orchestration
+- Safe reset mechanisms
 
-## Requirements
+The system is designed so that documents only need to be processed once while remaining searchable across future sessions.
 
-Soko is designed to run locally and requires only a standard Python environment with a small set of well-defined dependencies.
+---
 
-#### System Requirements
+# Architecture
 
-- Python 3.10 or newer
+The architecture consists of two independent pipelines connected through persistent storage.
 
-- Supported OS: Windows, macOS, Linux
+- **Ingestion Pipeline** – discovers, processes, and indexes documents.
+- **Query Pipeline** – retrieves relevant information and generates answers.
 
-- Sufficient disk space for vector storage (depends on document size)
+Both pipelines share the same vector database, registry, and cache.
 
-#### Core Dependencies
+## Workflow
 
-- ChromaDB – persistent local vector database
+![Workflow](/soko-workflow.png)
 
-- Sentence Transformers – semantic embedding generation
+---
 
-- PyTorch – backend for embedding models
+# System Workflow
 
-- pdfplumber / pdfminer – PDF text extraction
+## Ingestion Pipeline
 
-#### Agentic Reasoning & LLM Integration
+The ingestion pipeline converts raw documents into a searchable semantic index.
 
-- LangGraph – explicit agent execution graph
+### 1. File Discovery
 
-- LangChain Core – model and tool abstractions
+The user provides either
 
-- Google Generative AI (Gemini) – cloud LLM support
+- a single file
+- a directory
 
-    - Requires a valid GOOGLE_API_KEY environment variable
+Directories are scanned recursively and supported file types are collected.
 
-## CLI Usage
+---
+
+### 2. Deduplication
+
+Each discovered file is hashed using SHA-256.
+
+The registry is checked before processing.
+
+If a file hash already exists, the file is skipped entirely.
+
+This allows incremental ingestion without reprocessing previously indexed documents.
+
+---
+
+### 3. Document Processing
+
+New documents are
+
+- loaded
+- cleaned
+- split into semantic chunks
+
+Chunking ensures that retrieval occurs over meaningful pieces of text instead of entire documents.
+
+---
+
+### 4. Embedding Generation
+
+Each chunk is converted into a dense vector representation using a Sentence Transformer embedding model.
+
+These embeddings capture semantic meaning instead of simple keyword frequency.
+
+---
+
+### 5. Vector Storage
+
+Each embedding, along with its metadata, is stored inside ChromaDB.
+
+Stored metadata includes information such as
+
+- filename
+- parent directory
+- chunk index
+- content hash
+
+This metadata is later used for retrieval and citation.
+
+---
+
+### 6. Registry Update
+
+After successful indexing, the registry is updated.
+
+Only completed ingestions are committed, making the process restart-safe.
+
+---
+
+# Query Pipeline
+
+When a user asks a question, Soko retrieves relevant context before generating a response.
+
+### 1. User Query
+
+The user submits a natural-language question through the CLI.
+
+Examples:
+
+```text
+What is Retrieval-Augmented Generation?
+
+Explain RSA.
+
+Which files contain Hopfield Network?
+```
+
+---
+
+### 2. Intent Classification
+
+LangGraph determines how the request should be processed.
+
+Examples include
+
+- Question Answering
+- File Discovery
+- Future workflow extensions
+
+---
+
+### 3. Hybrid Retrieval
+
+Retrieval combines two independent search techniques.
+
+### Semantic Search
+
+Queries are embedded and searched against ChromaDB using vector similarity.
+
+This retrieves documents with similar meaning.
+
+### Keyword Search
+
+A BM25-based keyword search retrieves documents containing exact terms.
+
+This improves performance for technical identifiers, filenames, and exact phrases.
+
+---
+
+### 4. Score Fusion
+
+Results from semantic search and keyword search are merged into a unified ranking.
+
+This balances semantic relevance with exact keyword matches.
+
+---
+
+### 5. Context Formatting
+
+Retrieved chunks are grouped by their source file.
+
+Instead of passing isolated chunks to the language model, Soko formats context as
+
+```text
+=== File: Notes.pdf ===
+...
+
+=== File: Assignment.md ===
+...
+```
+
+This preserves document provenance and helps the model generate grounded answers.
+
+---
+
+### 6. Cache Lookup
+
+Before calling the language model, Soko checks a persistent SQLite cache.
+
+If the same question has already been answered using the same context, the cached response is returned immediately.
+
+Otherwise, the request proceeds to the language model.
+
+---
+
+### 7. Answer Generation
+
+The formatted context is passed to the configured language model.
+
+Current support includes
+
+- Gemini
+- Ollama fallback (planned/optional)
+
+The generated response is returned to the user and stored in the cache.
+
+---
+
+# LangGraph Workflow
+
+LangGraph is used as the orchestration layer for Soko's query pipeline.
+
+Instead of implementing retrieval inside one large function, each stage is represented as an explicit node with clearly defined inputs and outputs.
+
+Current workflow:
+![Workflow](/soko-workflow.png)
+
+Using LangGraph keeps the retrieval workflow modular and allows future extensions such as
+
+- reranking
+- query rewriting
+- citation verification
+- local/cloud model routing
+- multi-agent workflows
+
+without restructuring the application.
+
+---
+
+# Storage Components
+
+Soko maintains three persistent storage layers.
+
+| Component | Purpose |
+|-----------|---------|
+| ChromaDB | Stores document embeddings and metadata |
+| Registry | Tracks SHA-256 hashes of ingested files |
+| SQLite Cache | Stores previous question-answer pairs |
+
+Each component has a single responsibility, making the system easier to maintain.
+
+---
+
+# Key Features
+
+- Recursive document ingestion
+- Multi-format document support
+- Incremental indexing
+- SHA-256 hash-based deduplication
+- Semantic document chunking
+- Sentence Transformer embeddings
+- ChromaDB vector storage
+- Hybrid retrieval (Vector + BM25)
+- LangGraph query orchestration
+- Persistent SQLite answer cache
+- CLI interface built with Rich
+- Logical reset operations
+- Metadata-aware context formatting
+
+---
+
+# Supported File Types
+
+- PDF
+- TXT
+- Markdown
+- CSV
+- JSON
+- Python source files
+
+Additional loaders can be added without modifying the retrieval pipeline.
+
+---
+
+# Requirements
+
+## System Requirements
+
+- Python 3.10+
+- Windows
+- Linux
+- macOS
+
+---
+
+## Core Dependencies
+
+### Vector Database
+
+- ChromaDB
+
+### Embeddings
+
+- Sentence Transformers
+
+### Machine Learning Backend
+
+- PyTorch
+
+### PDF Processing
+
+- pdfplumber
+- pdfminer
+
+### Retrieval
+
+- rank-bm25
+
+### Agent Framework
+
+- LangGraph
+
+### LLM Abstractions
+
+- LangChain Core
+
+### Language Models
+
+- Google Gemini
+
+Requires
+
+```
+GOOGLE_API_KEY
+```
+
+---
+
+# CLI Usage
 
 ```bash
 Soko > ingest ./documents
+
 Soko > ingest ./book.pdf
-Soko > ask "What is this document about?"
+
+Soko > ask "Explain Retrieval-Augmented Generation."
+
+Soko > ask "Which files contain RSA?"
+
 Soko > status
+
 Soko > reset cache
+
 Soko > reset index
+
 Soko > reset all
+
+Soko > exit
 ```
 
-## Folder Structure
+---
+
+# Folder Structure
+
 ```
 src/
-│── ingest/
-│── retrieval/
-│── agent/
-│── cache/
-│── cli/
-│── utils/
+│
+├── agent/
+├── cache/
+├── cli/
+├── ingest/
+├── retrieval/
+└── utils/
 
 data/
-│── chroma/
-│── cache-db/
-│── raw/
+│
+├── chroma/
+├── cache-db/
+└── raw/
 ```
 
-## How Ingestion Works
-#### 1. File discovery (directory or single file)
-#### 2. Content hashing for deduplication
-#### 3. Semantic chunking
-#### 4. Embedding generation
-#### 5. Vector storage in ChromaDB
-#### 6. Registry update (commit step)
+---
 
-## How Retrieval Works
-#### 1. Query embedding
-#### 2. Vector similarity search
-#### 3. Keyword/BM25-style scoring
-#### 4. Score normalization
-#### 5. Hybrid ranking
-#### 6. Context assembly
+# Why Hybrid Retrieval?
 
+Semantic search understands meaning.
 
-### Deduplication
+Keyword search understands exact text.
 
-Each file is identified by a SHA-256 hash of its contents. A file is skipped during ingestion if its hash already exists in the registry. This ensures deterministic deduplication and allows modified files to be re-ingested safely.
+Neither approach is sufficient by itself.
 
+By combining both retrieval strategies before ranking, Soko improves both recall and precision across a wider range of queries.
 
-### Agentic Reasoning
+---
 
-LangGraph is used to define an explicit execution graph (retrieve → answer). Compared to LangChain’s higher-level abstractions, LangGraph makes control flow and state transitions explicit, improving debuggability and predictability.
+# Deduplication
 
+Each file is identified by its SHA-256 content hash rather than its filename.
 
-### Design Decisions
+This ensures
 
-- **ChromaDB**: simple local persistence and vector operations
-- **Content hashes**: content-based identity instead of filenames or paths
-- **Logical resets**: truncate collections and tables instead of deleting files
-- **Caching**: reduce LLM calls and quota usage
+- renamed files are not duplicated
+- identical files are skipped
+- modified files are automatically reprocessed
 
+---
 
+# Design Decisions
 
-## Limitations and Future Work
+### ChromaDB
 
-- No local LLM inference yet
-- Keyword ranking is basic
-- Registry is JSON-based and may migrate to a database
+Provides lightweight persistent vector storage suitable for local-first applications.
+
+### SHA-256 Registry
+
+Tracks document identity by content instead of filesystem location.
+
+### SQLite Cache
+
+Reduces repeated LLM calls and improves response latency.
+
+### LangGraph
+
+Separates retrieval, formatting, caching, and answer generation into explicit workflow stages.
+
+### Logical Reset Operations
+
+Collections and caches are cleared through application logic instead of deleting database files directly, avoiding filesystem locking issues.
+
+---
+
+# Limitations
+
+- Local GGUF inference is not yet integrated by default
+- Keyword ranking is intentionally simple
+- Registry currently uses JSON storage
+- No reranking model
+- No citation generation
 - No multi-user support
-- Add ASCII art to let users know the status of their operations
 
+---
 
+# Future Work
 
+- Local GGUF model support
+- Cross-encoder reranking
+- Citation-aware responses
+- OCR support for scanned PDFs
+- Metadata filtering
+- Query rewriting
+- Multi-agent workflows
+- Local-only inference mode
+- Improved file discovery mode
+- Plugin architecture for new document loaders
 
+---
+
+# License
+
+MIT License
